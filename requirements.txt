@@ -36,7 +36,6 @@ networkx==2.4
 numpy==1.18.3
 olefile==0.46
 pycparser==2.20
-pygpu==0.7.6
 pyOpenSSL==19.1.0
 pyparsing==2.4.6
 pyreadline==2.1
