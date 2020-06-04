@@ -5,7 +5,7 @@ from app.Model_functions import get_diff
 from keras.models import load_model
 
 app = Flask(__name__)
-app.config["SERVER_NAME"]="facenetapi.herokuapp.com"
+app.config["SERVER_NAME"]="facenetapi.com"
 model_path = 'app/modelFiles/facenet_keras.h5'
 model = load_model(model_path)
 
