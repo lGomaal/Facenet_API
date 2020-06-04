@@ -32,13 +32,9 @@ kiwisolver==1.1.0
 Mako==1.1.0
 Markdown==3.2.1
 MarkupSafe==1.1.1
-matplotlib==3.1.3
 networkx==2.4
 numpy==1.18.3
 olefile==0.46
-pandas==1.0.3
-Pillow==7.1.2
-protobuf==3.11.4
 pycparser==2.20
 pygpu==0.7.6
 pyOpenSSL==19.1.0
