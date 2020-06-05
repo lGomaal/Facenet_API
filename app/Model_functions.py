@@ -3,6 +3,7 @@ import cv2
 from scipy.spatial import distance
 from keras.models import load_model
 from skimage.transform import resize
+from keras import backend as k
 
 image_size = 160
 cascade_path = 'app/modelFiles/haarcascade_frontalface_alt2.xml'
@@ -45,20 +46,22 @@ def face_align(img, margin=10):
     return aligned
 
 
-def encoding(img, model):
-    pred = model.predict(np.expand_dims(img, axis=0))
-    emb = l2_normalize(pred)
-    return emb
+def encoding(img, model, graph):
+    with graph.as_default():
+        pred = model.predict(np.expand_dims(img, axis=0))
+        emb = l2_normalize(pred)
+        return emb
 
 
-def get_diff(img1 , model):
+def get_diff(img1, model, graph):
+    # model = load_model(model_path)
 
     img2 = cv2.imread('shahin1.jpg', cv2.IMREAD_COLOR)
 
     image1 = prewhiten(face_align(img1))
     image2 = prewhiten(face_align(img2))
 
-    embs1 = encoding(image1, model)
-    embs2 = encoding(image2, model)
-
+    embs1 = encoding(image1, model, graph)
+    embs2 = encoding(image2, model, graph)
+    # k.clear_session()
     return distance.euclidean(embs1, embs2)
