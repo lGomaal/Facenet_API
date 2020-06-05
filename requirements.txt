@@ -4,3 +4,4 @@ Keras==2.3.1
 numpy==1.18.3
 tensorflow==1.13.2
 opencv-python==3.4.3.18
+scikit-image==0.16.2
