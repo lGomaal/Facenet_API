@@ -3,8 +3,11 @@ import cv2
 from flask import Flask, request, jsonify, render_template
 from app.Model_functions import get_diff
 from keras.models import load_model
+import tensorflow as tf
 
 app = Flask(__name__)
+global graph
+graph = tf.get_default_graph()
 model_path = 'app/modelFiles/facenet_keras.h5'
 model = load_model(model_path)
 
@@ -17,8 +20,6 @@ def home():
 def predict_api():
 
     r = request
-    print(r.data)
-
     # convert string of image data to uint8
     nparr = np.fromstring(r.data, np.uint8)
     # decode image
@@ -32,5 +33,5 @@ def predict_api():
     # response_pickled = jsonpickle.encode(response)
 
     # return Response(response=response_pickled, status=200, mimetype="application/json")
-    return jsonify(get_diff(img , model))
+    return jsonify(get_diff(img, model, graph))
 
