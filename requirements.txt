@@ -7,4 +7,3 @@ opencv-python
 scikit-image==0.16.2
 scipy==1.4.1
 gunicorn==19.0.0
-libsm6
