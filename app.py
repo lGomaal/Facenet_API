@@ -1,80 +1,24 @@
-
 from flask import Flask, request, jsonify, render_template
-import numpy as np
-import cv2
-from scipy.spatial import distance
-from skimage.transform import resize
+from Model_functions import *
 from keras.models import load_model
 import tensorflow as tf
+from PIL import Image
+from keras import backend as k
+# from Facenet_database import *
+from classes import *
 
-app = Flask(__name__)
+# This line to ignore np package FutureWarning
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+
+
 global graph
 graph = tf.get_default_graph()
-image_size = 160
-cascade_path = 'haarcascade_frontalface_alt2.xml'
-model_path = 'facenet_keras.h5'
-model = load_model(model_path)
+model_path = './modelFiles/facenet_keras.h5'
+model = load_model(model_path, compile=False)
+k.set_learning_phase(0)
 
-
-
-
-
-
-def prewhiten(x):
-    if x.ndim == 4:
-        axis = (1, 2, 3)
-        size = x[0].size
-    elif x.ndim == 3:
-        axis = (0, 1, 2)
-        size = x.size
-    else:
-        raise ValueError('Dimension should be 3 or 4')
-
-    mean = np.mean(x, axis=axis, keepdims=True)
-    std = np.std(x, axis=axis, keepdims=True)
-    std_adj = np.maximum(std, 1.0/np.sqrt(size))
-    y = (x - mean) / std_adj
-    return y
-
-
-def l2_normalize(x, axis=-1, epsilon=1e-10):
-    output = x / np.sqrt(np.maximum(np.sum(np.square(x), axis=axis, keepdims=True), epsilon))
-    return output
-
-
-def face_align(img, margin=10):
-    cascade = cv2.CascadeClassifier(cascade_path)
-    faces = cascade.detectMultiScale(img,
-                                     scaleFactor=1.1,
-                                     minNeighbors=3)
-
-    (x, y, w, h) = faces[0]
-    cropped = img[y - margin // 2:y + h + margin // 2,
-              x - margin // 2:x + w + margin // 2, :]
-    aligned = resize(cropped, (image_size, image_size), mode='reflect')
-    return aligned
-
-
-def encoding(img, model, graph):
-    with graph.as_default():
-        pred = model.predict(np.expand_dims(img, axis=0))
-        emb = l2_normalize(pred)
-        return emb
-
-
-def get_diff(img1, model, graph):
-    # model = load_model(model_path)
-
-    img2 = cv2.imread('shahin1.jpg', cv2.IMREAD_COLOR)
-
-    image1 = prewhiten(face_align(img1))
-    image2 = prewhiten(face_align(img2))
-
-    embs1 = encoding(image1, model, graph)
-    embs2 = encoding(image2, model, graph)
-    # k.clear_session()
-    return distance.euclidean(embs1, embs2)
-
+app = Flask(__name__)
 
 
 @app.route('/')
@@ -82,26 +26,142 @@ def home():
     return render_template('index.html')
 
 
-@app.route('/predict_api',methods=['POST'])
+@app.route('/TA_login', methods=['POST'])
+def TA_login_api():
+    data = request.form.to_dict()
+    email = data['email']
+    password = data['password']
+    # id, subjects, state = login_TA(email, password)
+    return jsonify(TA.login_TA(email, password))
+
+
+@app.route('/get_sections', methods=['POST'])
+def get_sections():
+    data = request.form.to_dict()
+    TAID = data['TA_id']
+    subID = data['sub_id']
+    # lst_sections, year = get_sections_subject(TAID, subID)
+    return jsonify(Subject.get_sections_subject(TAID, subID))
+
+
+@app.route('/take_attendance', methods=['POST'])
+def record_attendance():
+    file = request.files['Image']
+    # Read the image via file.stream
+    img = Image.open(file.stream)
+    img = np.array(img)
+
+    data = request.form.to_dict()
+    section_number = data['section_number']
+    year = data['year']
+    week = data['week']
+    subject = data['subject']
+    list_of_students = TA.get_students_outof_section(section_number, year)
+    matched_name, id, min_dist = identify_dataset(img, model, graph, list_of_students)
+    if matched_name == 'NO Face Found in photo':
+        return jsonify('NO face', subject, 'NO Face Found in photo')
+
+    if matched_name is not None:
+        TA.insert_attendance(id, subject, week)
+        return jsonify(matched_name, subject, "Recorded")
+    else:
+        return jsonify(matched_name, subject, "Not_Recorded as their is no match found!!")
+
+
+@app.route('/check_diff', methods=['POST'])
+def check_diff():
+    file1 = request.files['Image1']
+    file2 = request.files['Image2']
+    # Read the image via file.stream
+    img1 = Image.open(file1.stream)
+    img1 = np.array(img1)
+
+    img2 = Image.open(file2.stream)
+    img2 = np.array(img2)
+
+    result = get_diff(img1, img2, model, graph)
+    return result
+
+
+@app.route('/predict_api', methods=['POST'])
 def predict_api():
 
-    r = request
-    # convert string of image data to uint8
-    nparr = np.fromstring(r.data, np.uint8)
-    # decode image
-    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    file = request.files['Image']
+    # Read the image via file.stream
+    img = Image.open(file.stream)
+    img = np.array(img)
 
-    # print(img.shape)
-    #
-    # response = {'message': 'image received. size={}x{}'.format(img.shape[1], img.shape[0])
-    #             }
-    # # encode response using jsonpickle
-    # response_pickled = jsonpickle.encode(response)
-
-    # return Response(response=response_pickled, status=200, mimetype="application/json")
-    return jsonify(get_diff(img, model, graph))
+    return jsonify(identify(img, model, graph))
 
 
+@app.route('/add_api', methods=['POST'])
+def add_api():
+    file = request.files['Image']
+    # Read the image via file.stream
+    img = Image.open(file.stream)
+    data = request.form.to_dict()
+    id = data['ID']
+    name = data['Name']
+    section = data['section']
+    email = data['email']
+    year = data['year']
+    img = np.array(img)
 
-if __name__ == "__main__":
-    app.run(debug=True)
+    # Encode image
+    face = FaceNet.face_align(img)
+    if face == []:
+        return 'NO Face Found in photo!'
+    image1 = FaceNet.prewhiten(face)
+    pred = FaceNet.encoding(image1, model, graph)
+    encod = FaceNet.l2_normalize(pred)
+    encod = np.asarray(encod)
+    # print(type(encod))
+
+    Student.insert_student(id, name, email, encod, section, year)
+    # dic = {id: [name, encod]}
+    # pickle.dump(dic, open("save.p", "wb"))
+    # dic = pickle.load(open("save.p", "rb"))
+    # if id not in dic:
+    #     dic[id] = [name, encod]
+    #     pickle.dump(dic, open("save.p", "wb"))
+    #     print(dic)
+    #     return 'Added successfully'
+
+    return 'New Student Added'
+
+
+@app.route('/TA_register', methods=['POST'])
+def ta_register():
+    data = request.form.to_dict()
+    name = data['Name']
+    email = data['email']
+    password = data['password']
+    TA.insert_ta(name, email, password)
+    return 'Registered !'
+
+
+@app.route('/TA_assignment', methods=['POST'])
+def ta_assign_subject():
+    data = request.form.to_dict()
+    TAID = data['TA_id']
+    subID = data['sub_id']
+    lst_sections = data['sections'].split(',')
+    intList = list(map(int, lst_sections))
+    Subject.assign_subjectTO_ta(TAID, subID, intList)
+    return 'Assigned successfully !'
+
+
+@app.route('/TA_remove', methods=['POST'])
+def ta_remove():
+    data = request.form.to_dict()
+    email = data['email']
+    TA.remove_TA(email)
+    return 'TA Removed'
+
+
+@app.route('/student_remove', methods=['POST'])
+def student_remove():
+    data = request.form.to_dict()
+    ID = data['ID']
+    Student.remove_student(ID)
+    return 'Student Deleted'
